@@ -1,20 +1,41 @@
 import numpy as np
 import pandas as pd
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template, request
 from flask_restful import Api
+from flask_socketio import SocketIO
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_watson import ToneAnalyzerV3
+from time import time
+from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk
+import pandas as pd
+import requests
+import pandas as pd
+import requests
+from elasticsearch import Elasticsearch
+import json
 
 app = Flask(__name__)
 api = Api(app=app)
+app.config['SESSION_TYPE'] = 'filesystem'
+socketio = SocketIO(app=app)
+
+# Elastic Search
+res = requests.get('http://localhost:5000')
+print(res.content)
+es = Elasticsearch([{'host': 'localhost', 'port': 5000}])
 
 
-@app.route("/tone_analyzer/", methods=["GET"])
-def get_tone():
+
+clients = []
+
+
+@socketio.on('generate')
+def get_tone(client_id):
     """
     :return: hotel reviews scores
     """
-    authenticator = IAMAuthenticator('3NqEGQWuRyt64R_Iz1uogCaNJxUqOzJ_BCo0p_GfVYMt')
+    authenticator = IAMAuthenticator('Bt_7ZXX7zc-nG_NWrRaNMwQTO3VD5je1F-4tJ7WIsad3')
     tone_analyzer = ToneAnalyzerV3(
         version='2017-09-21',
         authenticator=authenticator
@@ -48,26 +69,49 @@ def get_tone():
                             'Sadness': Sadness, 'Tentative': Tentative, 'Anger': Anger, 'Fear': Fear})
 
     df_tone = df_tone.groupby('Hotel_name').agg('mean')
-    df_tone.set_index('Hotel_name', inplace=True)
     result = {}
     for index, row in df_tone.iterrows():
         result[index] = dict(row)
+    socketio.emit('my response', {'data': jsonify(result)}, room=client_id)
+    print('generating tones for client {}'.format(client_id))
 
-    return jsonify(result)
+
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    clients.append(request.sid)
 
 
-@app.route('/get_index/', methods=["GET"])
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+    clients.remove(request.sid)
+
+
 def get_index():
     """
 
     :return: perform elastic search
     """
+    csvfile = pd.read_csv('data.csv', iterator=True, encoding="utf8")
+    r = requests.get('http: // localhost: 5000')
+    for i, df in enumerate(csvfile):
+        records = df.where(pd.notnull(df), None).T.to_dict()
+    list_records = [records[it] for it in records]
+    try:
+        for j, i in enumerate(list_records):
+            es.index(index=index_name, doc_type=doc_type, id=j, body=i)
+    except:
+        print(‘error
+        to
+        index
+        data’)
 
 
 @app.route('/')
-def hello_world():
-    return 'Hello World!'
+def index():
+    return render_template('index.html')
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    socketio.run(app(debug=True))

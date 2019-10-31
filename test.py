@@ -3,8 +3,7 @@ import pandas as pd
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_watson import ToneAnalyzerV3
 
-authenticator = IAMAuthenticator('3NqEGQWuRyt64R_Iz1uogCaNJxUqOzJ'
-                                 '_BCo0p_GfVYMt')
+authenticator = IAMAuthenticator('Bt_7ZXX7zc-nG_NWrRaNMwQTO3VD5je1F-4tJ7WIsad3')
 
 tone_analyzer = ToneAnalyzerV3(
     version='2017-09-21',
@@ -13,7 +12,7 @@ tone_analyzer = ToneAnalyzerV3(
 tone_analyzer.set_service_url('https://gateway-lon.watsonplatform.net/tone-analyzer/api')
 
 df = pd.read_csv('data.csv')
-df = df[['name', 'reviews.text']][:200]
+df = df[['name', 'reviews.text']]
 tones = []
 scores = []
 for i in list(df['reviews.text']):
@@ -38,7 +37,6 @@ df_tone = pd.DataFrame({'Hotel_name': list(df['name']), 'analytical': analytical
                         'Sadness': Sadness, 'Tentative': Tentative, 'Anger': Anger, 'Fear': Fear})
 
 df_tone = df_tone.groupby('Hotel_name').agg('mean')
-df_tone.set_index('Hotel_name', inplace=True)
 result = {}
 for index, row in df_tone.iterrows():
     result[index] = dict(row)
