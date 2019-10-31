@@ -1,33 +1,21 @@
 import numpy as np
 import pandas as pd
+import requests
+from elasticsearch import Elasticsearch
 from flask import Flask, jsonify, render_template, request
 from flask_restful import Api
 from flask_socketio import SocketIO
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_watson import ToneAnalyzerV3
-from time import time
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
-import pandas as pd
-import requests
-import pandas as pd
-import requests
-from elasticsearch import Elasticsearch
-import json
 
 app = Flask(__name__)
 api = Api(app=app)
 app.config['SESSION_TYPE'] = 'filesystem'
 socketio = SocketIO(app=app)
 
-# Elastic Search
-res = requests.get('http://localhost:5000')
-print(res.content)
-es = Elasticsearch([{'host': 'localhost', 'port': 5000}])
-
-
-
 clients = []
+
+es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
 
 
 @socketio.on('generate')
@@ -43,7 +31,7 @@ def get_tone(client_id):
     tone_analyzer.set_service_url('https://gateway-lon.watsonplatform.net/tone-analyzer/api')
 
     df = pd.read_csv('data.csv')
-    df = df[['name', 'reviews.text']][:200]
+    df = df[['name', 'reviews.text']]
     tones = []
     scores = []
     for i in list(df['reviews.text']):
@@ -67,6 +55,7 @@ def get_tone(client_id):
     df_tone = pd.DataFrame({'Hotel_name': list(df['name']), 'analytical': analytical,
                             'Confident': Confident, 'Joy': Joy,
                             'Sadness': Sadness, 'Tentative': Tentative, 'Anger': Anger, 'Fear': Fear})
+    df_tone.to_csv('tones.csv')
 
     df_tone = df_tone.groupby('Hotel_name').agg('mean')
     result = {}
@@ -88,24 +77,34 @@ def handle_disconnect():
     clients.remove(request.sid)
 
 
+@app.route('/index/')
 def get_index():
     """
 
     :return: perform elastic search
     """
+    tone_df = pd.read_csv('tone.csv')
+    tone_df.drop('Hotel_name', inplace=True, axis=1)
+    main_df = pd.read_csv('data.csv')
+    frames = [tone_df, main_df]
+    main_df = pd.concat(frames, axis=1)
+    main_df.to_csv('data.csv')
     csvfile = pd.read_csv('data.csv', iterator=True, encoding="utf8")
-    r = requests.get('http: // localhost: 5000')
+    r = requests.get('http://localhost:9200')
     for i, df in enumerate(csvfile):
         records = df.where(pd.notnull(df), None).T.to_dict()
     list_records = [records[it] for it in records]
     try:
         for j, i in enumerate(list_records):
-            es.index(index=index_name, doc_type=doc_type, id=j, body=i)
-    except:
-        print(‘error
-        to
-        index
-        data’)
+            es.index(index='index_name', doc_type='data frame', id=j, body=i)
+    except IndexError:
+        print('error to index data')
+
+
+@app.route('/index/<string:hotel_name>')
+def filter(hotel_name):
+    res = es.search(index='index_name', body={'query': {'match': {'name': hotel_name}}})
+    return jsonify(res['hits']['hits'])
 
 
 @app.route('/')
